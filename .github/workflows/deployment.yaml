@@ -55,7 +55,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_PROJECT_KEY: "starbucks-app"
+          SONAR_SCANNER_OPTS: "-Dsonar.projectKey=starbucks-app"
 
       # -----------------------------
       # OWASP DEPENDENCY CHECK
@@ -129,4 +129,4 @@ jobs:
           subject: "Deployment Successful"
           to: ${{ secrets.NOTIFY_EMAIL }}
           from: "GitHub Actions"
-          body: "Pipeline completed and app deployed to EC2."
+          body: "Pipeline finished with status: ${{ job.status }}. Check logs for details"
