@@ -13,21 +13,21 @@ jobs:
         uses: actions/checkout@v3
 
       # -----------------------------
-      # Auto-Fix Node Dependencies
+      # AUTO-FIX NODE DEPENDENCIES
       # -----------------------------
-      - name: install npm-check-updates
+      - name: Install npm-check-updates
         run: npm install -g npm-check-updates
 
-      - name: upgrade all deoendencies
+      - name: Upgrade all dependencies
         run: ncu -u
 
-      - name: Install updated Dependencies
+      - name: Install updated dependencies
         run: npm install
 
-      - name: Run npm audit Auto-Fix
+      - name: Run npm audit fix
         run: npm audit fix || true
 
-      - name: Run npm audit fix --force (fallback)
+      - name: Run npm audit fix --force
         run: npm audit fix --force || true
 
       # -----------------------------
@@ -35,12 +35,15 @@ jobs:
       # -----------------------------
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
+          TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db
+          TRIVY_DISABLE_VEX_NOTICE: true
         with:
           scan-type: fs
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: 1
-          format: table
 
       # -----------------------------
       # SONARQUBE SCAN
@@ -81,12 +84,15 @@ jobs:
       # -----------------------------
       - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
+          TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db
+          TRIVY_DISABLE_VEX_NOTICE: true
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: 1
-          format: table
 
       # -----------------------------
       # PUSH IMAGE TO DOCKER HUB
