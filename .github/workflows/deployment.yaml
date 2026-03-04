@@ -1,0 +1,107 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # -----------------------------
+      # TRIVY FS SCAN (source code)
+      # -----------------------------
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          format: table
+
+      # -----------------------------
+      # SONARQUBE SCAN
+      # -----------------------------
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v2
+        with:
+          projectBaseDir: .
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # -----------------------------
+      # OWASP DEPENDENCY CHECK
+      # -----------------------------
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "starbucks-app"
+          path: "."
+          format: "HTML"
+          out: "reports"
+
+      # -----------------------------
+      # DOCKER BUILD
+      # -----------------------------
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest .
+
+      # -----------------------------
+      # TRIVY IMAGE SCAN (after build)
+      # -----------------------------
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          format: table
+
+      # -----------------------------
+      # PUSH IMAGE TO DOCKER HUB
+      # -----------------------------
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+
+      # -----------------------------
+      # DEPLOY TO EC2
+      # -----------------------------
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+            docker stop starbucks || true
+            docker rm starbucks || true
+            docker run -d -p 80:80 --name starbucks ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+
+      # -----------------------------
+      # EMAIL NOTIFICATION
+      # -----------------------------
+      - name: Send Email Notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "Deployment Successful"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: "GitHub Actions"
+          body: "Pipeline completed and app deployed to EC2."
