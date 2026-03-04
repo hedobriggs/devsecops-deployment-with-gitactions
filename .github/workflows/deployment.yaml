@@ -13,6 +13,24 @@ jobs:
         uses: actions/checkout@v3
 
       # -----------------------------
+      # Auto-Fix Node Dependencies
+      # -----------------------------
+      - name: install npm-check-updates
+        run: npm install -g npm-check-updates
+
+      - name: upgrade all deoendencies
+        run: ncu -u
+
+      - name: Install updated Dependencies
+        run: npm install
+
+      - name: Run npm audit Auto-Fix
+        run: npm audit fix || true
+
+      - name: Run npm audit fix --force (fallback)
+        run: npm audit fix --force || true
+
+      # -----------------------------
       # TRIVY FS SCAN (source code)
       # -----------------------------
       - name: Trivy FS Scan
