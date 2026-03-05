@@ -182,7 +182,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "${{ job.status == 'success' && '✅ SUCCESS' || '❌ FAILED' }} - DevSecOps Pipeline #${{ github.run_number }}"
           to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "DevSecOps Pipeline <${{ secrets.EMAIL_USERNAME }}>"
+          from: "DevSecOps Pipelines <${{ secrets.EMAIL_USERNAME }}>"
           body: |
             Pipeline Status: ${{ job.status }}
 
