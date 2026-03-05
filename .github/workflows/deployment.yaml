@@ -39,6 +39,7 @@ jobs:
       # TRIVY FS SCAN
       # -----------------------------
       - name: Trivy FS Scan
+        id: trivy-scan-1
         uses: aquasecurity/trivy-action@master
         env:
           TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
@@ -54,6 +55,7 @@ jobs:
       # SONARQUBE SCAN
       # -----------------------------
       - name: SonarQube Scan
+        id: sonar
         uses: sonarsource/sonarqube-scan-action@v3
         with:
           projectBaseDir: .
@@ -66,6 +68,7 @@ jobs:
       # OWASP DEPENDENCY CHECK
       # -----------------------------
       - name: OWASP Dependency Check
+        id: owasp
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: "starbucks-app"
@@ -94,6 +97,7 @@ jobs:
       # BUILD DOCKER IMAGE
       # -------------------------
       - name: Build Docker image
+        id: docker-build
         run: |
           TAG=${GITHUB_RUN_NUMBER}
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG .
@@ -104,6 +108,7 @@ jobs:
       # TRIVY IMAGE SCAN
       # -----------------------------
       - name: Trivy Image Scan
+        id: trivy-image-2
         uses: aquasecurity/trivy-action@master
         env:
           TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
@@ -128,6 +133,7 @@ jobs:
       # PUSH IMAGE
       # -----------------------------
       - name: Push Docker image
+        id: docker-push
         run: |
           TAG=${GITHUB_RUN_NUMBER}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG
@@ -137,6 +143,7 @@ jobs:
       # DEPLOY TO EC2
       # -------------------------
       - name: Deploy to EC2
+        id: code-deploy-EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -155,7 +162,7 @@ jobs:
             # Run container
             docker run -d \
               --name $CONTAINER \
-              -p 80:80 \
+              -p 3000:80 \
               --restart unless-stopped \
               $IMAGE
 
@@ -173,8 +180,17 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Pipeline Status: ${{ job.status }}"
+          subject: "${{ job.status == 'success' && '✅ SUCCESS' || '❌ FAILED' }} - DevSecOps Pipeline #${{ github.run_number }}"
           to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "GitHub Actions"
+          from: "DevSecOps Pipeline <${{ secrets.EMAIL_USERNAME }}>"
           body: |
-            Pipeline finished with status: ${{ job.status }}.
+            Pipeline Status: ${{ job.status }}
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Triggered by: ${{ github.actor }}
+
+            View full logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Docker Image: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
