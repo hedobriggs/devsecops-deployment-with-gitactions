@@ -150,7 +150,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            CONTAINER=app
+            CONTAINER=starbucks
             IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
 
             # Stop and remove old container
