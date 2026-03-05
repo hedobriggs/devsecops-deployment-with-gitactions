@@ -36,7 +36,7 @@ jobs:
         run: npm audit fix --force || true
 
       # -----------------------------
-      # TRIVY FS SCAN (source code)
+      # TRIVY FS SCAN
       # -----------------------------
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
@@ -125,7 +125,7 @@ jobs:
           path: trivy-results.sarif
 
       # -----------------------------
-      # PUSH IMAGE TO DOCKER HUB
+      # PUSH IMAGE
       # -----------------------------
       - name: Push Docker image
         run: |
@@ -133,30 +133,34 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
 
-      # -----------------------------
+      # -------------------------
       # DEPLOY TO EC2
-      # -----------------------------
+      # -------------------------
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
+          username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🔍 Pulling latest image..."
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+            CONTAINER=app
+            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
 
-            echo "🛑 Stopping old container..."
-            docker stop starbucks || true
-            docker rm starbucks || true
+            # Stop and remove old container
+            docker rm -f $CONTAINER 2>/dev/null || true
 
-            echo "🚀 Starting new container..."
-            docker run -d -p 80:80 --name starbucks \
+            # Pull new image
+            docker pull $IMAGE
+
+            # Run container
+            docker run -d \
+              --name $CONTAINER \
+              -p 80:80 \
               --restart unless-stopped \
-              ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+              $IMAGE
 
-            echo "✅ Deployment complete!"
-            docker ps | grep starbucks
+            # Clean unused images
+            docker image prune -af
 
       # -----------------------------
       # EMAIL NOTIFICATION
@@ -169,15 +173,8 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "✅ Pipeline ${{ job.status }}: starbucks-app #${{ github.run_number }}"
+          subject: "Pipeline Status: ${{ job.status }}"
           to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "GitHub Actions <${{ secrets.EMAIL_USERNAME }}>"
+          from: "GitHub Actions"
           body: |
-            Pipeline Status: ${{ job.status }}
-
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Run Number: ${{ github.run_number }}
-
-            View details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Pipeline finished with status: ${{ job.status }}.
