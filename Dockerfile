@@ -11,9 +11,6 @@ COPY . .
 # Install dependencies
 RUN npm install
 
-# Copy the entire codebase to the working directory
-COPY . /app/
-
 # Expose the port your container app
 EXPOSE 3000    
 
