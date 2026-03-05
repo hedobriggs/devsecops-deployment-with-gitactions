@@ -162,7 +162,7 @@ jobs:
             # Run container
             docker run -d \
               --name $CONTAINER \
-              -p 3000:80 \
+              -p 3000:3000 \
               --restart unless-stopped \
               $IMAGE
 
