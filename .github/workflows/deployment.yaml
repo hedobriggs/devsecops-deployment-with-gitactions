@@ -99,9 +99,8 @@ jobs:
       - name: Build Docker image
         id: docker-build
         run: |
-          TAG=${GITHUB_RUN_NUMBER}
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG \
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }} .
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }} \
                      ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
 
       # -----------------------------
@@ -135,8 +134,7 @@ jobs:
       - name: Push Docker image
         id: docker-push
         run: |
-          TAG=${GITHUB_RUN_NUMBER}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
 
       # -------------------------
@@ -153,20 +151,15 @@ jobs:
             CONTAINER=starbucks
             IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
 
-            # Stop and remove old container
             docker rm -f $CONTAINER 2>/dev/null || true
-
-            # Pull new image
             docker pull $IMAGE
 
-            # Run container
             docker run -d \
               --name $CONTAINER \
               -p 3000:3000 \
               --restart unless-stopped \
               $IMAGE
 
-            # Clean unused images
             docker image prune -af
 
       # -----------------------------
@@ -180,17 +173,13 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "${{ job.status == 'success' && '✅ SUCCESS' || '❌ FAILED' }} - DevSecOps Pipeline #${{ github.run_number }}"
+          subject: "DevSecOps Pipeline #${{ github.run_number }} - ${{ job.status }}"
           to: ${{ secrets.NOTIFY_EMAIL }}
           from: "DevSecOps Pipelines <${{ secrets.EMAIL_USERNAME }}>"
           body: |
             Pipeline Status: ${{ job.status }}
-
             Repository: ${{ github.repository }}
             Branch: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
             Triggered by: ${{ github.actor }}
-
-            View full logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
             Docker Image: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
