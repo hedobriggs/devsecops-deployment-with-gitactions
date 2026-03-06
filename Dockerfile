@@ -1,35 +1,11 @@
-
-# Stage 1: Build
-FROM node:18-alpine AS build
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json ./
-
-# Debug: Check if files are there
-RUN ls -la
-
-# Install dependencies
-RUN npm install --legacy-peer-deps
-
-# Debug: Check if react-scripts is installed
-RUN ls -la node_modules/.bin/
-
-# Debug: Check package.json scripts
-RUN cat package.json
-
-# Copy source code
 COPY . .
 
-# Build the app
-RUN npm run build
+RUN npm install
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+EXPOSE 3000
 
-COPY --from=build /app/build /usr/share/nginx/html
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["npm", "start"]
