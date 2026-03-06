@@ -1,11 +1,19 @@
-FROM node:18-alpine
+FROM node:18
 
 WORKDIR /app
 
-COPY . .
+# Copy package files
+COPY package*.json ./
 
+# Install ALL dependencies
+ENV NODE_ENV=development
 RUN npm install
 
+# Copy source
+COPY . .
+
+# Expose port
 EXPOSE 3000
 
+# Start
 CMD ["npm", "start"]
