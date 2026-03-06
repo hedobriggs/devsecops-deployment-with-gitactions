@@ -171,7 +171,7 @@ jobs:
             echo "🛑 Removing old container..."
             docker rm -f $CONTAINER 2>/dev/null || true
 
-            echo "🚀 Starting new container..."
+            echo "🚀 Starting new container...."
             docker run -d \
               --name $CONTAINER \
               -p 3000:3000 \
