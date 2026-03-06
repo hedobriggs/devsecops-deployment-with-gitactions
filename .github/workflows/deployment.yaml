@@ -10,36 +10,43 @@ jobs:
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@v4
 
       # -----------------------------
       # AUTO-FIX NODE DEPENDENCIES
       # -----------------------------
       - name: Setup Node.js
+        id: setup-node
         uses: actions/setup-node@v4
         with:
           node-version: "18"
 
       - name: Install npm-check-updates
+        id: install-ncu
         run: npm install -g npm-check-updates
 
       - name: Upgrade all dependencies
+        id: upgrade-deps
         run: ncu -u
 
       - name: Install updated dependencies
+        id: install-deps
         run: npm install
 
       - name: Run npm audit fix
+        id: npm-audit
         run: npm audit fix || true
 
       - name: Run npm audit fix --force
+        id: npm-audit-force
         run: npm audit fix --force || true
 
       # -----------------------------
       # TRIVY FS SCAN
       # -----------------------------
       - name: Trivy FS Scan
-        id: trivy-scan-1
+        id: trivy-fs
         uses: aquasecurity/trivy-action@master
         env:
           TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
@@ -55,7 +62,7 @@ jobs:
       # SONARQUBE SCAN
       # -----------------------------
       - name: SonarQube Scan
-        id: sonar
+        id: sonarqube
         uses: sonarsource/sonarqube-scan-action@v3
         with:
           projectBaseDir: .
@@ -78,6 +85,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload OWASP Report
+        id: upload-owasp
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -88,6 +96,7 @@ jobs:
       # LOGIN TO DOCKER HUB
       # -------------------------
       - name: Login to Docker Hub
+        id: docker-login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -99,22 +108,23 @@ jobs:
       - name: Build Docker image
         id: docker-build
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }} .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }} \
+          TAG=${{ github.run_number }}
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG .
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG \
                      ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
 
       # -----------------------------
       # TRIVY IMAGE SCAN
       # -----------------------------
       - name: Trivy Image Scan
-        id: trivy-image-2
+        id: trivy-image
         uses: aquasecurity/trivy-action@master
         env:
           TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
           TRIVY_JAVA_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-java-db
           TRIVY_DISABLE_VEX_NOTICE: "true"
         with:
-          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: 0
@@ -122,6 +132,7 @@ jobs:
           output: "trivy-results.sarif"
 
       - name: Upload Trivy Results
+        id: upload-trivy
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -129,19 +140,20 @@ jobs:
           path: trivy-results.sarif
 
       # -----------------------------
-      # PUSH IMAGE
+      # PUSH IMAGE TO DOCKER HUB
       # -----------------------------
       - name: Push Docker image
         id: docker-push
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
+          TAG=${{ github.run_number }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:latest
 
       # -------------------------
       # DEPLOY TO EC2
       # -------------------------
       - name: Deploy to EC2
-        id: code-deploy-EC2
+        id: deploy-ec2
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -149,23 +161,33 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             CONTAINER=starbucks
-            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
+            TAG=${{ github.run_number }}
+            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:$TAG
 
-            docker rm -f $CONTAINER 2>/dev/null || true
+            echo "🔍 Pulling image: $IMAGE"
             docker pull $IMAGE
 
+            echo "🛑 Removing old container..."
+            docker rm -f $CONTAINER 2>/dev/null || true
+
+            echo "🚀 Starting new container..."
             docker run -d \
               --name $CONTAINER \
-              -p 3000:3000 \
+              -p 80:3000 \
               --restart unless-stopped \
               $IMAGE
 
+            echo "🧹 Cleaning up old images..."
             docker image prune -af
+
+            echo "✅ Deployment complete!"
+            docker ps | grep $CONTAINER
 
       # -----------------------------
       # EMAIL NOTIFICATION
       # -----------------------------
       - name: Send Email Notification
+        id: email
         if: always()
         uses: dawidd6/action-send-mail@v3
         with:
@@ -173,13 +195,20 @@ jobs:
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "DevSecOps Pipeline #${{ github.run_number }} - ${{ job.status }}"
+          subject: "${{ job.status == 'success' && '✅' || '❌' }} Pipeline #${{ github.run_number }} - ${{ job.status }}"
           to: ${{ secrets.NOTIFY_EMAIL }}
-          from: "DevSecOps Pipelines <${{ secrets.EMAIL_USERNAME }}>"
-          body: |
-            Pipeline Status: ${{ job.status }}
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            Triggered by: ${{ github.actor }}
-            Docker Image: ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}
+          from: "DevSecOps <${{ secrets.EMAIL_USERNAME }}>"
+          html_body: |
+            <b>Status:</b> ${{ job.status }}<br>
+            <b>Image:</b> ${{ secrets.DOCKERHUB_USERNAME }}/starbucks-app:${{ github.run_number }}<br><br>
+
+            <b>Pipeline Steps:</b><br>
+            Trivy FS Scan: ${{ steps.trivy-fs.outcome }}<br>
+            SonarQube: ${{ steps.sonarqube.outcome }}<br>
+            OWASP Check: ${{ steps.owasp.outcome }}<br>
+            Docker Build: ${{ steps.docker-build.outcome }}<br>
+            Trivy Image: ${{ steps.trivy-image.outcome }}<br>
+            Docker Push: ${{ steps.docker-push.outcome }}<br>
+            EC2 Deploy: ${{ steps.deploy-ec2.outcome }}<br><br>
+
+            <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs</a>
