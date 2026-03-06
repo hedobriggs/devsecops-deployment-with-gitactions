@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Force install all deps (including react-scripts)
+# Force install all deployments (including react-scripts)
 RUN npm install --include=dev
 
 COPY . .
